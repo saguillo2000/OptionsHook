@@ -45,6 +45,8 @@ contract OptionsHook is BaseHook {
     using CurrencyLibrary for Currency;
 
     error OptionsHook__ThisIsAnError();
+    error OptionsHook_StatusInvalid();
+    error OptionsHook_NotYourOption();
 
     // NOTE: ---------------------------------------------------------
     // state variables should typically be unique to a pool
@@ -80,7 +82,7 @@ contract OptionsHook is BaseHook {
 
     // mapping(address owner => uint256) public traderNonce; // nonce for the options
     mapping(address asset => uint256) public optionNonce; // nonce for the options
-    
+
     constructor(IPoolManager _poolManager) BaseHook(_poolManager) {}
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
@@ -95,7 +97,7 @@ contract OptionsHook is BaseHook {
             afterSwap: false,
             beforeDonate: false,
             afterDonate: false,
-            beforeSwapReturnDelta: false,
+            beforeSwapReturnDelta: true,
             afterSwapReturnDelta: false,
             afterAddLiquidityReturnDelta: false,
             afterRemoveLiquidityReturnDelta: false
@@ -106,26 +108,27 @@ contract OptionsHook is BaseHook {
     // NOTE: see IHooks.sol for function documentation
     // -----------------------------------------------
 
-    function beforeSwap(address, PoolKey calldata _key, IPoolManager.SwapParams calldata _params, bytes calldata _hookData)
-    external
-    override
-    returns (bytes4, BeforeSwapDelta, uint24)
-    {
+    function beforeSwap(
+        address,
+        PoolKey calldata _key,
+        IPoolManager.SwapParams calldata _params,
+        bytes calldata _hookData
+    ) external override returns (bytes4, BeforeSwapDelta, uint24) {
         (uint8 hookCase, OptionInfo memory option) = abi.decode(_hookData, (uint8, OptionInfo));
 
-        if (hookCase == 1){
+        if (hookCase == 1) {
             Currency input = _params.zeroForOne ? _key.currency0 : _key.currency1;
 
-            placeNewOption(
-                option
-            );
+            placeNewOption(option);
 
             poolManager.take(input, address(this), uint256(-_params.amountSpecified));
         }
 
-        if (hookCase == 2){
-            // validateOptionStatus(option, OptionStatus.PLACED, "Order must be in the placed status to book option");
-            require(_params.amountSpecified == int256(option.assetAmountOut), "Incorrect amount sent");
+        if (hookCase == 2) {
+            validateOptionStatus(option, OptionStatus.PLACED);
+            if (_params.amountSpecified != int256(option.assetAmountOut)){
+                revert OptionsHook__ThisIsAnError();
+            }
 
             Currency output = _params.zeroForOne ? _key.currency1 : _key.currency0;
             OptionInfo storage option = options[option.assetTypeIn][option.nonce];
@@ -133,19 +136,14 @@ contract OptionsHook is BaseHook {
             bookOption(option);
 
             poolManager.take(output, address(this), uint256(_params.amountSpecified));
+        } else {
+            revert OptionsHook__ThisIsAnError();
         }
-
-        else{
-            revert();
-        }
-        
 
         return (BaseHook.beforeSwap.selector, toBeforeSwapDelta(-int128(_params.amountSpecified), 0), 0);
-    
     }
 
     function placeNewOption(OptionInfo memory option) internal {
-
         uint256 nonce = optionNonce[option.assetTypeIn];
         options[option.assetTypeIn][nonce] = option;
         optionStatus[option.assetTypeIn][nonce] = OptionStatus.PLACED;
@@ -155,33 +153,30 @@ contract OptionsHook is BaseHook {
         }
     }
 
-    function bookOption(
-        OptionInfo memory option
-    ) internal {
+    function bookOption(OptionInfo memory option) internal {
         option.owner = msg.sender;
         optionStatus[option.assetTypeIn][option.nonce] = OptionStatus.RESERVED;
     }
 
-    function handleExecuteOption(
-        address asset,
-        uint256 nonce
-    ) private {
+    function handleExecuteOption(address asset, uint256 nonce) private {
         OptionInfo storage option = options[asset][nonce];
 
-        validateOptionStatus(option, OptionStatus.RESERVED, "Order must be in the reserved status to execute option");
-        require(option.owner == msg.sender, "Only the owner can execute this option");
+        validateOptionStatus(option, OptionStatus.RESERVED);
+        if (option.owner != msg.sender){
+            revert OptionsHook_NotYourOption();
+        }
 
         IERC20(option.assetTypeIn).transfer(option.recipientAddress, option.assetAmountIn);
     }
 
-    function validateOptionStatus(
-        OptionInfo storage option,
-        OptionStatus requiredStatus,
-        string memory errorMessage
-    ) private view {
-        if (optionStatus[option.assetTypeIn][option.nonce] == requiredStatus || option.timestampExpiration < block.timestamp) {
-            revert(errorMessage);
+    function validateOptionStatus(OptionInfo memory option, OptionStatus requiredStatus)
+        private
+        view{
+        if (
+            optionStatus[option.assetTypeIn][option.nonce] == requiredStatus
+                || option.timestampExpiration < block.timestamp
+        ) {
+            revert OptionsHook_StatusInvalid();
         }
     }
-
 }
