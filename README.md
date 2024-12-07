@@ -1,66 +1,91 @@
-## Foundry
+# OptionsHook
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+OptionsHook is a decentralized smart contract framework that allows users to create and manage options trading workflows. The workflow consists of three main steps: **Place Option**, **Book Option**, and **Execute Option**. This framework is designed for financial enthusiasts and traders looking for on-chain options trading with enforced time-based expirations.
 
-Foundry consists of:
+---
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+## Table of Contents
+- [OptionsHook](#optionshook)
+  - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+  - [How It Works](#how-it-works)
+  - [Features](#features)
+  - [Pipeline](#pipeline)
+  - [Getting Started](#getting-started)
+    - [Prerequisites](#prerequisites)
 
-## Documentation
+---
 
-https://book.getfoundry.sh/
+## Overview
 
-## Usage
+OptionsHook enables a seamless workflow for options trading between two users:
+- **User A (Quant)**: Places the option by locking funds and specifying output and expiration details.
+- **User B (Trader)**: Books the option and locks the required funds to match the option.
+- **Execution**: The booked option must be executed before expiration, ensuring a fair and timely swap of funds.
 
-### Build
+The protocol leverages smart contracts to enforce transparency, trustlessness, and automation in the options trading process.
 
-```shell
-$ forge build
-```
+---
 
-### Test
+## How It Works
 
-```shell
-$ forge test
-```
+The contract operates in three phases:
 
-### Format
+1. **Place Option**:
+   - User A specifies the output amount, input token type, and expiration date.
+   - Funds are locked in the contract for the specified option.
 
-```shell
-$ forge fmt
-```
+2. **Book Option**:
+   - User B locks the required output amount, effectively "booking" the option.
+   - The option is marked as **Reserved** for the specific user.
 
-### Gas Snapshots
+3. **Execute Option**:
+   - Before expiration, User B executes the option.
+   - The locked funds are swapped between User A and User B, completing the transaction.
 
-```shell
-$ forge snapshot
-```
+If the option is not executed before expiration, it becomes invalid, and funds are returned accordingly.
 
-### Anvil
+---
 
-```shell
-$ anvil
-```
+## Features
 
-### Deploy
+- **Decentralized Options Trading**: Fully on-chain mechanism for options trading.
+- **Timely Execution**: Enforces expiration dates for fair trading.
+- **Secure Fund Locking**: Funds are held securely in the smart contract.
+- **Transparent Workflow**: State transitions for options (e.g., Placed → Reserved → Executed) are visible to all participants.
 
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
+---
 
-### Cast
+## Pipeline
 
-```shell
-$ cast <subcommand>
-```
+Below is a high-level representation of the workflow:
 
-### Help
+1. **Place Option**  
+   - User A (Quant) locks funds in the `OptionsHook` contract.
+   - Specifies:
+     - Input token type
+     - Output token amount
+     - Expiration time
 
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+2. **Book Option**  
+   - User B (Trader) locks the output amount.
+   - The option is now reserved and can only be executed by User B.
+
+3. **Execute Option**  
+   - User B executes the option before the expiration time.
+   - Locked funds are swapped, completing the trade.
+
+![Workflow Diagram](image.png)
+
+---
+
+## Getting Started
+
+Follow these instructions to build and test the project locally.
+
+### Prerequisites
+
+- Install [Foundry](https://getfoundry.sh/):
+  ```bash
+  curl -L https://foundry.paradigm.xyz | bash
+  foundryup
